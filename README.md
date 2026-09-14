@@ -68,6 +68,7 @@ python experiments/mnist_subliminal.py --stage all --model ternary --max-noise-s
 ## Controlled Ternary Sweep
 
 The main experiment uses one fixed ternary teacher initialization, one fixed different-student initialization, one trained ternary teacher, and one cached 400k noise/logit dataset.
+The 10 controlled student runs use `student_lr=1e-4`. The script also includes one extra diagnostic run using `400k aux same-init`, `student_lr=3e-4`, `ReduceLROnPlateau`, and `100` epochs.
 
 Run everything:
 
@@ -88,6 +89,7 @@ Results are written under `runs/`.
 
 Each run directory contains:
 
+- `experiment.log`: one timestamped log file for the whole top-level run folder.
 - `config.json`: exact run parameters.
 - `checkpoints/teacher_init.pt`: fixed teacher initialization used by same-init students.
 - `checkpoints/student_different_init.pt`: fixed different initialization used by different-init students.
@@ -98,8 +100,16 @@ Each run directory contains:
 - `logit_cache/teacher_logits_all.pt`: all 13 teacher logits for the fixed 400k noise inputs.
 - `students/<run>/student_history.csv`: student train distillation loss, validation distillation loss, MNIST test loss, MNIST test accuracy, learning rate, target type, noise size, and init mode per epoch.
 - `students/<run>/student_latest.ckpt`: resumable student checkpoint with model and optimizer state.
-- `students/<run>/student_trained.pt`: final student weights.
+- `students/<run>/student_best.ckpt`: best student checkpoint with model, optimizer, and optional scheduler state.
+- `students/<run>/student_best.pt`: best student weights by MNIST test accuracy.
+- `students/<run>/student_final.pt`: final student weights.
 - `summary.json`: final metrics and output file list.
 - `teacher_loss.png`, `teacher_accuracy.png`, `student_distill_loss.png`, `student_mnist_accuracy.png`: plots for the report.
 
 To extend a student run later, increase `--epochs-student` and pass `--resume` with the same run parameters. The script loads `student_latest.ckpt`, resumes Adam's optimizer state, and appends to the same history CSV.
+
+Monitor progress:
+
+```bash
+tail -f runs/experiment.log
+```
