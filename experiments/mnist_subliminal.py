@@ -10,8 +10,10 @@ import logging
 import math
 import random
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 import matplotlib
 
@@ -27,6 +29,13 @@ from tqdm import tqdm
 
 
 LOGGER = logging.getLogger("mnist_subliminal")
+IST = ZoneInfo("Asia/Kolkata")
+
+
+class ISTFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        timestamp = datetime.fromtimestamp(record.created, IST)
+        return timestamp.strftime("%Y-%m-%d %I:%M:%S %p IST")
 
 
 class TernaryWeightSTE(torch.autograd.Function):
@@ -114,7 +123,7 @@ def setup_logging(output_dir: str) -> None:
     root = Path(output_dir)
     root.mkdir(parents=True, exist_ok=True)
     log_path = root / "experiment.log"
-    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
+    formatter = ISTFormatter("%(asctime)s | %(levelname)s | %(message)s")
     handlers = [logging.FileHandler(log_path), logging.StreamHandler(sys.stdout)]
     for handler in handlers:
         handler.setFormatter(formatter)
