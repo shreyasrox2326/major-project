@@ -2,14 +2,14 @@
 
 This repository extends the earlier subliminal learning project from regular neural networks to BitNet-style low-bit networks.
 
-The first target is the MNIST auxiliary-logit experiment:
+The first target is the MNIST logit-distillation experiment:
 
 1. Train a teacher MLP on MNIST digit labels.
 2. Feed random noise images into the trained teacher.
-3. Save only the noise images and teacher auxiliary logits.
-4. Train a student only on that noise/logit dataset.
+3. Save the noise images and all 13 teacher logits once.
+4. Train students on slices of that fixed noise/logit dataset.
 5. Evaluate whether the student's primary digit logits classify real MNIST digits.
-6. Compare full-precision MLPs against BitNet-style ternary MLPs.
+6. Compare ternary runs across noise size, logit target, and initialization mode.
 
 ## Implementation Choice
 
@@ -37,9 +37,9 @@ pip install -r requirements.txt
 On the Lightning server:
 
 ```bash
-cd major-project
-python3 -m venv .venv
-source .venv/bin/activate
+cd ~/repos/major-project
+python3 -m venv ~/venvs/mnist-bitnet
+source ~/venvs/mnist-bitnet/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -48,23 +48,13 @@ The intended workflow is:
 ```bash
 # Laptop: develop and commit locally
 git add .
-git commit -m "Add MNIST BitNet subliminal experiment scaffold"
+git commit -m "Update MNIST BitNet experiment pipeline"
 git push
 
-# Laptop: sync code to Lightning, since the server does not have git
-./scripts/sync_to_lightning.sh
-
-# Lightning: run experiments
-cd ~/major-project
-python experiments/mnist_subliminal.py --model ternary --noise-size 10000 --epochs-student 1 --quick
-```
-
-If `rsync` is unavailable, use `scp`:
-
-```bash
-tar --exclude .git --exclude .venv --exclude data --exclude runs -czf /tmp/major-project.tar.gz .
-scp /tmp/major-project.tar.gz s_01m2fw60p95y4zweav7yree60q@ssh.lightning.ai:~/
-ssh s_01m2fw60p95y4zweav7yree60q@ssh.lightning.ai 'mkdir -p ~/major-project && tar -xzf ~/major-project.tar.gz -C ~/major-project'
+# Lightning: pull and run experiments
+cd ~/repos/major-project
+git pull
+source ~/venvs/mnist-bitnet/bin/activate
 ```
 
 ## First Experiments
@@ -72,27 +62,26 @@ ssh s_01m2fw60p95y4zweav7yree60q@ssh.lightning.ai 'mkdir -p ~/major-project && t
 Run a smoke test:
 
 ```bash
-python experiments/mnist_subliminal.py --model ternary --noise-size 10000 --epochs-teacher 1 --epochs-student 1 --quick
+python experiments/mnist_subliminal.py --stage all --model ternary --max-noise-size 1000 --epochs-teacher 1 --epochs-student 1 --quick --num-workers 0 --output-dir runs_smoke
 ```
 
-Run the regular full-precision baseline:
+## Controlled Ternary Sweep
+
+The main experiment uses one fixed ternary teacher initialization, one fixed different-student initialization, one trained ternary teacher, and one cached 400k noise/logit dataset.
+
+Run everything:
 
 ```bash
-python experiments/mnist_subliminal.py --model fp32 --noise-size 200000 --epochs-teacher 5 --epochs-student 30 --student-init same --distill aux
+bash scripts/run_ternary_mnist_sweep.sh
 ```
 
-Run the BitNet-style ternary version:
+Or run stages manually:
 
 ```bash
-python experiments/mnist_subliminal.py --model ternary --noise-size 200000 --epochs-teacher 5 --epochs-student 30 --student-init same --distill aux
-```
-
-Useful controls:
-
-```bash
-python experiments/mnist_subliminal.py --model ternary --noise-size 200000 --student-init different --distill aux
-python experiments/mnist_subliminal.py --model ternary --noise-size 200000 --student-init same --distill all
-python experiments/mnist_subliminal.py --model fp32 --noise-size 200000 --student-init different --distill aux
+python experiments/mnist_subliminal.py --stage init --model ternary
+python experiments/mnist_subliminal.py --stage train-teacher --model ternary --epochs-teacher 5 --resume
+python experiments/mnist_subliminal.py --stage generate-logits --model ternary --max-noise-size 400000
+python experiments/mnist_subliminal.py --stage train-student --model ternary --noise-size 200000 --distill aux --student-init same --epochs-student 30 --resume
 ```
 
 Results are written under `runs/`.
@@ -100,8 +89,17 @@ Results are written under `runs/`.
 Each run directory contains:
 
 - `config.json`: exact run parameters.
-- `teacher_history.csv`: teacher train loss, validation loss, validation accuracy, test loss, and test accuracy per epoch.
-- `student_history.csv`: student train KL loss, validation KL loss, MNIST test loss, and MNIST test accuracy per epoch.
+- `checkpoints/teacher_init.pt`: fixed teacher initialization used by same-init students.
+- `checkpoints/student_different_init.pt`: fixed different initialization used by different-init students.
+- `checkpoints/teacher_latest.ckpt`: resumable teacher checkpoint with model and optimizer state.
+- `checkpoints/teacher_trained.pt`: final trained teacher weights.
+- `checkpoints/teacher_history.csv`: teacher train loss, validation loss, validation accuracy, test loss, test accuracy, and learning rate per epoch.
+- `logit_cache/noise.pt`: fixed random noise inputs.
+- `logit_cache/teacher_logits_all.pt`: all 13 teacher logits for the fixed 400k noise inputs.
+- `students/<run>/student_history.csv`: student train distillation loss, validation distillation loss, MNIST test loss, MNIST test accuracy, learning rate, target type, noise size, and init mode per epoch.
+- `students/<run>/student_latest.ckpt`: resumable student checkpoint with model and optimizer state.
+- `students/<run>/student_trained.pt`: final student weights.
 - `summary.json`: final metrics and output file list.
-- `teacher_loss.png`, `teacher_accuracy.png`, `student_kl_loss.png`, `student_mnist_accuracy.png`: plots for the report.
-- `teacher.pt`, `student.pt`: saved model weights.
+- `teacher_loss.png`, `teacher_accuracy.png`, `student_distill_loss.png`, `student_mnist_accuracy.png`: plots for the report.
+
+To extend a student run later, increase `--epochs-student` and pass `--resume` with the same run parameters. The script loads `student_latest.ckpt`, resumes Adam's optimizer state, and appends to the same history CSV.
