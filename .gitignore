@@ -1,2 +1,7 @@
 brief.txt
 *.pdf
+__pycache__/
+*.py[cod]
+.venv/
+data/
+runs/

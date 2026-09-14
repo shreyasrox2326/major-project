@@ -96,3 +96,12 @@ python experiments/mnist_subliminal.py --model fp32 --noise-size 200000 --studen
 ```
 
 Results are written under `runs/`.
+
+Each run directory contains:
+
+- `config.json`: exact run parameters.
+- `teacher_history.csv`: teacher train loss, validation loss, validation accuracy, test loss, and test accuracy per epoch.
+- `student_history.csv`: student train KL loss, validation KL loss, MNIST test loss, and MNIST test accuracy per epoch.
+- `summary.json`: final metrics and output file list.
+- `teacher_loss.png`, `teacher_accuracy.png`, `student_kl_loss.png`, `student_mnist_accuracy.png`: plots for the report.
+- `teacher.pt`, `student.pt`: saved model weights.
