@@ -2,7 +2,7 @@
 set -euo pipefail
 
 COMMON_ARGS=(
-  --model ternary
+  --model "${MODEL:-ternary}"
   --seed 0
   --noise-seed 1000
   --batch-size 256
@@ -23,11 +23,11 @@ log_step() {
   printf '%s | SCRIPT | %s\n' "$(TZ=Asia/Kolkata date '+%Y-%m-%d %I:%M:%S %p IST')" "$*" | tee -a runs/experiment.log
 }
 
-log_step "init fixed checkpoints"
+log_step "init fixed checkpoints for model=${MODEL:-ternary}"
 python experiments/mnist_subliminal.py --stage init "${COMMON_ARGS[@]}"
-log_step "train teacher"
+log_step "train teacher for model=${MODEL:-ternary}"
 python experiments/mnist_subliminal.py --stage train-teacher "${COMMON_ARGS[@]}" --resume
-log_step "generate 400k teacher logits"
+log_step "generate 400k teacher logits for model=${MODEL:-ternary}"
 python experiments/mnist_subliminal.py --stage generate-logits "${COMMON_ARGS[@]}" --max-noise-size 400000
 
 log_step "student 10k aux same"

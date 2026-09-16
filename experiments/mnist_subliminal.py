@@ -174,7 +174,7 @@ def split_dataset(dataset, val_fraction: float, seed: int):
 
 
 def mnist_loaders(args, dev: torch.device) -> tuple[DataLoader, DataLoader, DataLoader]:
-    transform = transforms.ToTensor()
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
     train = datasets.MNIST(args.data_dir, train=True, download=True, transform=transform)
     test = datasets.MNIST(args.data_dir, train=False, download=True, transform=transform)
     if args.quick:
@@ -394,7 +394,7 @@ def generate_logits(args) -> None:
     load_model_state(teacher_path, teacher, dev)
     teacher.eval()
 
-    noise = torch.rand(args.max_noise_size, 1, 28, 28)
+    noise = torch.rand(args.max_noise_size, 1, 28, 28) * 2 - 1
     logits = []
     with torch.no_grad():
         for start in tqdm(range(0, args.max_noise_size, args.batch_size), desc="teacher logits"):
@@ -408,6 +408,7 @@ def generate_logits(args) -> None:
         {
             "noise_size": args.max_noise_size,
             "noise_seed": args.noise_seed,
+            "noise_range": [-1, 1],
             "noise_shape": list(noise.shape),
             "logits_shape": list(logits_all.shape),
             "noise_path": str(noise_path),
@@ -418,7 +419,7 @@ def generate_logits(args) -> None:
 
 
 def student_run_name(args) -> str:
-    base = f"ternary_noise{args.noise_size}_{args.distill}_{args.student_init}_seed{args.seed}"
+    base = f"{args.model}_noise{args.noise_size}_{args.distill}_{args.student_init}_seed{args.seed}"
     return f"{base}_{args.run_tag}" if args.run_tag else base
 
 

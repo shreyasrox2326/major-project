@@ -65,15 +65,22 @@ Run a smoke test:
 python experiments/mnist_subliminal.py --stage all --model ternary --max-noise-size 1000 --epochs-teacher 1 --epochs-student 1 --quick --num-workers 0 --output-dir runs_smoke
 ```
 
-## Controlled Ternary Sweep
+## Controlled MNIST Sweep
 
-The main experiment uses one fixed ternary teacher initialization, one fixed different-student initialization, one trained ternary teacher, and one cached 400k noise/logit dataset.
+The main experiment uses one fixed teacher initialization, one fixed different-student initialization, one trained teacher, and one cached 400k noise/logit dataset.
 The 10 controlled student runs use `student_lr=1e-4`. The script also includes one extra diagnostic run using `400k aux same-init`, `student_lr=3e-4`, `ReduceLROnPlateau`, and `100` epochs.
+MNIST inputs and generated noise are both centered to `[-1, 1]`.
 
-Run everything:
+Run the BitNet-style ternary sweep:
 
 ```bash
 bash scripts/run_ternary_mnist_sweep.sh
+```
+
+Run the full-precision MLP sweep with the same settings:
+
+```bash
+MODEL=fp32 bash scripts/run_ternary_mnist_sweep.sh
 ```
 
 Or run stages manually:
