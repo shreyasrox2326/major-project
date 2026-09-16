@@ -76,24 +76,18 @@ Observation: main/all logits transfer normally in both models. The interesting g
 
 ## Plateau Stress Test
 
-Stress test: 400k aux same-init, LR `3e-4`, `ReduceLROnPlateau`, 100 epochs.
+Stress test: 400k aux same-init, LR `1e-4`, 100 epochs. The run starts fresh and uses a plateau-best strategy: when MNIST accuracy plateaus, reload the run's own best checkpoint, lower LR, and continue.
 
 | Model | Best accuracy | Best epoch | Final accuracy |
 |---|---:|---:|---:|
-| BitNet-style MLP | 50.76% | 3 | 18.78% |
-| FP32 MLP | 94.05% | 73 | 93.96% |
+| BitNet-style MLP | 59.90% | 55 | 58.13% |
+| FP32 MLP | 94.16% | 82 | 94.15% |
 
-The BitNet stress run still collapses. Lowering LR on plateau did not rescue it. A better follow-up is to resume from the best-accuracy checkpoint with a smaller LR.
+The BitNet stress run no longer collapses under this setting. It remains much weaker than FP32, but it stabilizes around the high-50% range.
 
-![BitNet plateau accuracy and LR](images/plateau_accuracy_lr_bitnet.png)
+![Plateau-best stress accuracy and LR](images/plateau_best_accuracy_lr.png)
 
-![BitNet plateau loss and LR](images/plateau_loss_lr_bitnet.png)
-
-FP32 remains stable in the same diagnostic.
-
-![FP32 plateau accuracy and LR](images/plateau_accuracy_lr_fp32.png)
-
-![FP32 plateau loss and LR](images/plateau_loss_lr_fp32.png)
+![Plateau-best stress loss and LR](images/plateau_best_loss_lr.png)
 
 ## Preprocessing Note
 
@@ -107,6 +101,12 @@ The earlier BitNet run used MNIST/noise in `[0,1]`. It showed much weaker transf
 | 400k | 12.42% | 56.66% |
 
 This should be treated as a methodological note, not the main comparison. The main FP32-vs-BitNet comparison uses the centered `[-1,1]` setup for both models.
+
+## LR Sensitivity Note
+
+An earlier BitNet stress run used LR `3e-4` with ordinary `ReduceLROnPlateau`. It peaked at 50.76% by epoch 3 and ended at 18.78%. The likely issue is that `3e-4` was too high for the BitNet student: by the time LR reduction triggered, the model had already drifted into a collapsed state.
+
+This is also a methodology note. The main stress result uses LR `1e-4`, which is consistent with the main sweep.
 
 ## Takeaway
 
