@@ -17,12 +17,6 @@
 | MNIST/noise range | `[-1, 1]` | `[-1, 1]` |
 | Validation split | 20% of MNIST train/noise cache | 20% of MNIST train/noise cache |
 
-Run folders:
-
-- BitNet centered run: `run_3_bitnet_mlp_centered_minus1to1`
-- FP32 centered run: `run_4_fp32_mlp_centered_minus1to1`
-- Earlier BitNet `[0,1]` run: `run_2_student_lr1e-4_input0to1_baseline`
-
 ## Teacher Check
 
 Both teachers learn MNIST before any subliminal-transfer experiment.
