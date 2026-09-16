@@ -1,5 +1,7 @@
 brief.txt
 *.pdf
+AGENTS.md
+.agent/
 __pycache__/
 *.py[cod]
 .venv/
