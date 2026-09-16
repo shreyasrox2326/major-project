@@ -424,7 +424,7 @@ def student_run_name(args) -> str:
 
 
 def make_scheduler(optimizer, args):
-    if args.scheduler == "none":
+    if args.scheduler in {"none", "plateau_best"}:
         return None
     if args.scheduler == "plateau":
         mode = "max" if args.scheduler_monitor == "mnist_test_accuracy" else "min"
@@ -468,6 +468,7 @@ def train_student(args) -> None:
     history = []
     start_epoch = 1
     best_accuracy = -1.0
+    plateau_bad_epochs = 0
 
     if args.resume and latest_path.exists():
         checkpoint = torch.load(latest_path, map_location=dev)
@@ -479,6 +480,8 @@ def train_student(args) -> None:
         history = read_history(history_path)
         if history:
             best_accuracy = max(float(row["mnist_test_accuracy"]) for row in history)
+            best_index = max(range(len(history)), key=lambda index: float(history[index]["mnist_test_accuracy"]))
+            plateau_bad_epochs = len(history) - best_index - 1
     elif latest_path.exists() and not args.overwrite:
         raise FileExistsError(f"{latest_path} exists; pass --resume or --overwrite")
 
@@ -528,11 +531,34 @@ def train_student(args) -> None:
         save_checkpoint(latest_path, epoch, model, optimizer, config, scheduler)
         if test_acc > best_accuracy:
             best_accuracy = test_acc
+            plateau_bad_epochs = 0
             torch.save(model.state_dict(), run_dir / "student_best.pt")
             save_checkpoint(run_dir / "student_best.ckpt", epoch, model, optimizer, config, scheduler)
+        else:
+            plateau_bad_epochs += 1
         if scheduler is not None:
             metric = test_acc if args.scheduler_monitor == "mnist_test_accuracy" else val_distill_loss
             scheduler.step(metric)
+        if args.scheduler == "plateau_best" and plateau_bad_epochs > args.plateau_patience:
+            current_lr_after_epoch = optimizer.param_groups[0]["lr"]
+            next_lr = max(current_lr_after_epoch * args.plateau_factor, args.min_lr)
+            if next_lr < current_lr_after_epoch:
+                best_checkpoint_path = run_dir / "student_best.ckpt"
+                checkpoint = torch.load(best_checkpoint_path, map_location=dev)
+                model.load_state_dict(checkpoint["model_state_dict"])
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                for group in optimizer.param_groups:
+                    group["lr"] = next_lr
+                save_checkpoint(latest_path, epoch, model, optimizer, config, scheduler)
+                LOGGER.info(
+                    "student run=%s plateau_best restored=%s reduced_lr %.2e -> %.2e after epoch=%s",
+                    student_run_name(args),
+                    best_checkpoint_path,
+                    current_lr_after_epoch,
+                    next_lr,
+                    epoch,
+                )
+            plateau_bad_epochs = 0
         LOGGER.info(
             "student run=%s epoch=%s train_distill=%.4f val_distill=%.4f mnist_test_acc=%.4f lr=%.2e",
             student_run_name(args),
@@ -642,11 +668,11 @@ def run_all(args) -> None:
     args.noise_size = 400_000
     args.distill = "aux"
     args.student_init = "same"
-    args.student_lr = 3e-4
+    args.student_lr = 1e-4
     args.epochs_student = 100
-    args.scheduler = "plateau"
+    args.scheduler = "plateau_best"
     args.scheduler_monitor = "mnist_test_accuracy"
-    args.run_tag = "plateau_lr3e-4_100epoch"
+    args.run_tag = "plateau_best_lr1e-4_100epoch"
     train_student(args)
 
 
@@ -668,7 +694,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--teacher-lr", type=float, default=1e-3)
     parser.add_argument("--student-lr", type=float, default=1e-3)
-    parser.add_argument("--scheduler", choices=["none", "plateau"], default="none")
+    parser.add_argument("--scheduler", choices=["none", "plateau", "plateau_best"], default="none")
     parser.add_argument("--scheduler-monitor", choices=["mnist_test_accuracy", "val_distill_loss"], default="mnist_test_accuracy")
     parser.add_argument("--plateau-factor", type=float, default=0.5)
     parser.add_argument("--plateau-patience", type=int, default=5)

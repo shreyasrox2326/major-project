@@ -105,7 +105,7 @@ Run the full-precision MLP sweep with the same settings:
 MODEL=fp32 bash scripts/run_ternary_mnist_sweep.sh
 ```
 
-The script also includes one diagnostic run at the end: 400k aux same-init, `student_lr=3e-4`, `ReduceLROnPlateau`, and 100 epochs.
+The script also includes one diagnostic run at the end: 400k aux same-init, `student_lr=1e-4`, 100 epochs, and a plateau-best strategy that restores the run's own best checkpoint whenever the monitored accuracy plateaus before lowering the learning rate.
 
 ## Outputs
 

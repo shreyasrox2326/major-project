@@ -52,6 +52,6 @@ python experiments/mnist_subliminal.py --stage train-student "${COMMON_ARGS[@]}"
 log_step "student 200k all different"
 python experiments/mnist_subliminal.py --stage train-student "${COMMON_ARGS[@]}" --noise-size 200000 --distill all --student-init different --resume
 
-log_step "diagnostic student 400k aux same plateau lr3e-4 100epoch"
-python experiments/mnist_subliminal.py --stage train-student "${COMMON_ARGS[@]}" --noise-size 400000 --distill aux --student-init same --student-lr 3e-4 --scheduler plateau --scheduler-monitor mnist_test_accuracy --epochs-student 100 --run-tag plateau_lr3e-4_100epoch --resume
+log_step "diagnostic student 400k aux same plateau-best lr1e-4 100epoch"
+python experiments/mnist_subliminal.py --stage train-student "${COMMON_ARGS[@]}" --noise-size 400000 --distill aux --student-init same --student-lr 1e-4 --scheduler plateau_best --scheduler-monitor mnist_test_accuracy --epochs-student 100 --run-tag plateau_best_lr1e-4_100epoch --resume
 log_step "sweep complete"
