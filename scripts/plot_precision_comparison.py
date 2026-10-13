@@ -163,24 +163,26 @@ def main() -> None:
             ("plateau_best_accuracy_lr.png", ("mnist_test_accuracy",), "MNIST test accuracy (%)", "Plateau-best stress accuracy and LR"),
             ("plateau_best_loss_lr.png", ("train_distill_loss", "val_distill_loss"), "KL loss", "Plateau-best stress loss and LR"),
         ):
-            fig, ax = plt.subplots(figsize=(9, 5))
-            lr_ax = ax.twinx()
-            for label in labels:
+            fig, (ax, lr_ax) = plt.subplots(2, 1, sharex=True, figsize=(9, 7),
+                                              gridspec_kw={"height_ratios": [3, 1]})
+            for index, label in enumerate(labels):
                 history = read_csv(stress_dir(stress_runs[label]) / "student_history.csv")
                 epochs = [int(r["epoch"]) for r in history]
-                for field in fields:
+                color = f"C{index}"
+                for field_index, field in enumerate(fields):
                     multiplier = 100 if field == "mnist_test_accuracy" else 1
                     ax.plot(epochs, [multiplier * float(r[field]) for r in history],
+                            color=color, linestyle="-" if field_index == 0 else "--",
                             label=f"{label} {field.replace('_', ' ')}")
                 lr_ax.step(epochs, [float(r["learning_rate"]) for r in history], where="post",
-                           linestyle=":", alpha=0.45, label=f"{label} LR")
-            ax.set_xlabel("Epoch")
+                           color=color, label=label)
+            lr_ax.set_xlabel("Epoch")
             ax.set_ylabel(ylabel)
             lr_ax.set_ylabel("Student learning rate")
             lr_ax.set_yscale("log")
-            ax.set_title(title)
-            ax.legend(loc="upper left", fontsize=8)
-            lr_ax.legend(loc="upper right", fontsize=8)
+            fig.suptitle(title)
+            ax.legend(ncol=2, fontsize=8)
+            lr_ax.legend(ncol=min(5, len(labels)), fontsize=8)
             fig.tight_layout()
             fig.savefig(args.output_dir / filename, dpi=200)
             plt.close(fig)
