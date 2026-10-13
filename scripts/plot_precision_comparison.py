@@ -64,6 +64,8 @@ def main() -> None:
                         help="repeat as LABEL=RUN_DIRECTORY, e.g. FP32=run_4_fp32_mlp_centered_minus1to1")
     parser.add_argument("--stress-run", type=parse_mapping, action="append", default=[],
                         help="optional LABEL=RUN_DIRECTORY when stress histories live elsewhere")
+    parser.add_argument("--skip-stress", action="store_true",
+                        help="build the first five figures while separate stress archives are unavailable")
     parser.add_argument("--output-dir", type=Path, default=Path("docs/images/continuation"))
     args = parser.parse_args()
     runs = dict(args.run)
@@ -92,11 +94,12 @@ def main() -> None:
                              "target": target, "init": init,
                              "best_accuracy": summary["best_mnist_test_accuracy"],
                              "final_accuracy": summary["final_mnist_test_accuracy"]})
-        summary = read_json(stress_dir(stress_runs[label]) / "summary.json")
-        rows.append({"model": label, "comparison": "stress", "noise_size": 400_000,
-                     "target": "aux", "init": "same",
-                     "best_accuracy": summary["best_mnist_test_accuracy"],
-                     "final_accuracy": summary["final_mnist_test_accuracy"]})
+        if not args.skip_stress:
+            summary = read_json(stress_dir(stress_runs[label]) / "summary.json")
+            rows.append({"model": label, "comparison": "stress", "noise_size": 400_000,
+                         "target": "aux", "init": "same",
+                         "best_accuracy": summary["best_mnist_test_accuracy"],
+                         "final_accuracy": summary["final_mnist_test_accuracy"]})
     with (args.output_dir / "comparison_metrics.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
@@ -111,10 +114,11 @@ def main() -> None:
     save_plot(args.output_dir / "teacher_sanity.png")
 
     plt.figure(figsize=(8, 5))
-    for label in labels:
+    for index, label in enumerate(labels):
         model_rows = [r for r in rows if r["model"] == label and r["comparison"] == "size"]
-        plt.plot(SIZES, [100 * r["best_accuracy"] for r in model_rows], marker="o", label=f"{label} best")
-        plt.plot(SIZES, [100 * r["final_accuracy"] for r in model_rows], linestyle="--", alpha=0.7, label=f"{label} final")
+        color = f"C{index}"
+        plt.plot(SIZES, [100 * r["best_accuracy"] for r in model_rows], marker="o", color=color, label=f"{label} best")
+        plt.plot(SIZES, [100 * r["final_accuracy"] for r in model_rows], linestyle="--", color=color, alpha=0.7, label=f"{label} final")
     plt.xlabel("Noise samples")
     plt.ylabel("MNIST test accuracy (%)")
     plt.title("Aux-only same-init dataset size sweep")
@@ -154,34 +158,38 @@ def main() -> None:
     plt.legend()
     save_plot(args.output_dir / "target_init_sweep_200k.png")
 
-    for filename, fields, ylabel, title in (
-        ("plateau_best_accuracy_lr.png", ("mnist_test_accuracy",), "MNIST test accuracy (%)", "Plateau-best stress accuracy and LR"),
-        ("plateau_best_loss_lr.png", ("train_distill_loss", "val_distill_loss"), "KL loss", "Plateau-best stress loss and LR"),
-    ):
-        fig, ax = plt.subplots(figsize=(9, 5))
-        lr_ax = ax.twinx()
-        for label in labels:
-            history = read_csv(stress_dir(stress_runs[label]) / "student_history.csv")
-            epochs = [int(r["epoch"]) for r in history]
-            for field in fields:
-                multiplier = 100 if field == "mnist_test_accuracy" else 1
-                ax.plot(epochs, [multiplier * float(r[field]) for r in history],
-                        label=f"{label} {field.replace('_', ' ')}")
-            lr_ax.step(epochs, [float(r["learning_rate"]) for r in history], where="post",
-                       linestyle=":", alpha=0.45, label=f"{label} LR")
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel(ylabel)
-        lr_ax.set_ylabel("Student learning rate")
-        lr_ax.set_yscale("log")
-        ax.set_title(title)
-        ax.legend(loc="upper left", fontsize=8)
-        lr_ax.legend(loc="upper right", fontsize=8)
-        fig.tight_layout()
-        fig.savefig(args.output_dir / filename, dpi=200)
-        plt.close(fig)
+    if not args.skip_stress:
+        for filename, fields, ylabel, title in (
+            ("plateau_best_accuracy_lr.png", ("mnist_test_accuracy",), "MNIST test accuracy (%)", "Plateau-best stress accuracy and LR"),
+            ("plateau_best_loss_lr.png", ("train_distill_loss", "val_distill_loss"), "KL loss", "Plateau-best stress loss and LR"),
+        ):
+            fig, ax = plt.subplots(figsize=(9, 5))
+            lr_ax = ax.twinx()
+            for label in labels:
+                history = read_csv(stress_dir(stress_runs[label]) / "student_history.csv")
+                epochs = [int(r["epoch"]) for r in history]
+                for field in fields:
+                    multiplier = 100 if field == "mnist_test_accuracy" else 1
+                    ax.plot(epochs, [multiplier * float(r[field]) for r in history],
+                            label=f"{label} {field.replace('_', ' ')}")
+                lr_ax.step(epochs, [float(r["learning_rate"]) for r in history], where="post",
+                           linestyle=":", alpha=0.45, label=f"{label} LR")
+            ax.set_xlabel("Epoch")
+            ax.set_ylabel(ylabel)
+            lr_ax.set_ylabel("Student learning rate")
+            lr_ax.set_yscale("log")
+            ax.set_title(title)
+            ax.legend(loc="upper left", fontsize=8)
+            lr_ax.legend(loc="upper right", fontsize=8)
+            fig.tight_layout()
+            fig.savefig(args.output_dir / filename, dpi=200)
+            plt.close(fig)
 
-    (args.output_dir / "source_runs.json").write_text(json.dumps({label: str(root.resolve()) for label, root in runs.items()}, indent=2))
-    print(f"Wrote comparison metrics and seven figures to {args.output_dir}")
+    (args.output_dir / "source_runs.json").write_text(json.dumps({
+        "sweep_runs": {label: str(root.resolve()) for label, root in runs.items()},
+        "stress_runs": {} if args.skip_stress else {label: str(stress_runs[label].resolve()) for label in labels},
+    }, indent=2))
+    print(f"Wrote comparison metrics and {5 if args.skip_stress else 7} figures to {args.output_dir}")
 
 
 if __name__ == "__main__":
