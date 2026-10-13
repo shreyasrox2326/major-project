@@ -77,10 +77,43 @@ class BitLinear(nn.Module):
         return F.linear(x, TernaryWeightSTE.apply(self.weight), self.bias)
 
 
+class UniformWeightSTE(torch.autograd.Function):
+    """Symmetric signed weight quantization with a straight-through gradient."""
+
+    @staticmethod
+    def forward(ctx, weight: torch.Tensor, bits: int) -> torch.Tensor:
+        qmax = (1 << (bits - 1)) - 1
+        scale = weight.detach().abs().amax().clamp_min(1e-8) / qmax
+        return weight.div(scale).round().clamp(-qmax, qmax).mul(scale)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor, None]:
+        return grad_output, None
+
+
+class QuantizedLinear(nn.Linear):
+    """FP32 latent weights, quantized forward weights, FP32 bias and activations."""
+
+    def __init__(self, in_features: int, out_features: int, bits: int) -> None:
+        super().__init__(in_features, out_features)
+        self.bits = bits
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return F.linear(x, UniformWeightSTE.apply(self.weight, self.bits), self.bias)
+
+
 class MLP(nn.Module):
     def __init__(self, model: str, hidden_size: int = 256, output_size: int = 13) -> None:
         super().__init__()
-        linear = BitLinear if model == "ternary" else nn.Linear
+        if model == "ternary":
+            linear = BitLinear
+        elif model in {"q4", "q8", "q16"}:
+            bits = int(model[1:])
+            linear = lambda in_features, out_features: QuantizedLinear(in_features, out_features, bits)
+        elif model == "fp32":
+            linear = nn.Linear
+        else:
+            raise ValueError(f"unknown model: {model}")
         self.net = nn.Sequential(
             nn.Flatten(),
             linear(28 * 28, hidden_size),
@@ -270,7 +303,7 @@ def init_fixed_checkpoints(args) -> None:
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     teacher_path = ckpt_dir / "teacher_init.pt"
     student_path = ckpt_dir / "student_different_init.pt"
-    if (teacher_path.exists() or student_path.exists()) and not args.overwrite:
+    if teacher_path.exists() and student_path.exists() and not args.overwrite:
         LOGGER.info("fixed init checkpoints already exist under %s; pass --overwrite to replace them", ckpt_dir)
         return
     set_seed(args.seed)
@@ -385,7 +418,7 @@ def generate_logits(args) -> None:
         raise FileNotFoundError(f"missing trained teacher: {teacher_path}")
     noise_path = cache_dir / "noise.pt"
     logits_path = cache_dir / "teacher_logits_all.pt"
-    if (noise_path.exists() or logits_path.exists()) and not args.overwrite:
+    if noise_path.exists() and logits_path.exists() and not args.overwrite:
         LOGGER.info("cached noise/logits already exist under %s; pass --overwrite to replace them", cache_dir)
         return
 
@@ -648,6 +681,10 @@ def run_all(args) -> None:
     init_fixed_checkpoints(args)
     train_teacher(args)
     generate_logits(args)
+    if args.quick:
+        args.noise_size = min(args.noise_size, args.max_noise_size)
+        train_student(args)
+        return
     for noise_size, distill, student_init in [
         (10_000, "aux", "same"),
         (40_000, "aux", "same"),
@@ -683,7 +720,7 @@ def parse_args():
         choices=["init", "train-teacher", "generate-logits", "train-student", "all"],
         required=True,
     )
-    parser.add_argument("--model", choices=["fp32", "ternary"], default="ternary")
+    parser.add_argument("--model", choices=["fp32", "ternary", "q4", "q8", "q16"], default="ternary")
     parser.add_argument("--noise-size", type=int, default=10_000)
     parser.add_argument("--max-noise-size", type=int, default=400_000)
     parser.add_argument("--noise-seed", type=int, default=1000)

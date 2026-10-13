@@ -49,8 +49,11 @@ The first 10 outputs are MNIST class logits. The final 3 outputs are auxiliary l
 |---|---|
 | Full-precision MLP | `torch.nn.Linear` |
 | BitNet-style MLP | local `BitLinear` implementation |
+| 4/8/16-bit MLP | local `QuantizedLinear` implementation |
 
 The local `BitLinear` layer uses full-precision latent trainable weights, ternary forward weights in `{-1, 0, +1}`, abs-mean scaling, and a straight-through estimator for backpropagation. This implementation is intended for controlled learning-behavior experiments, not optimized BitNet inference.
+
+The `q4`, `q8`, and `q16` variants use full-precision latent trainable weights and symmetric per-tensor uniform quantization in each forward pass, with a straight-through gradient. Their biases and activations remain full precision. The signed quantizer uses `2^(bits-1)-1` as its maximum integer magnitude, giving 15, 255, and 65,535 weight levels respectively. These are training-time weight quantization experiments, not compressed inference benchmarks; checkpoint files retain full-precision latent weights and the same layout as previous runs.
 
 ## Setup
 
@@ -104,6 +107,17 @@ Run the full-precision MLP sweep with the same settings:
 ```bash
 MODEL=fp32 bash scripts/run_ternary_mnist_sweep.sh
 ```
+
+From the repository root in the CUDA-enabled Docker container (mounted at `/workspaces/code/major-project`), run the continuation sweeps:
+
+```bash
+bash scripts/run_quantized_mnist_sweeps.sh
+```
+
+This writes the same checkpoints, histories, summaries, and plots as the previous sweeps under separate `run_6_q4_mlp_centered_minus1to1`, `run_7_q8_mlp_centered_minus1to1`, and `run_8_q16_mlp_centered_minus1to1` directories. Run one precision at a time with `MODEL=q4 OUTPUT_DIR=run_6_q4_mlp_centered_minus1to1 bash scripts/run_ternary_mnist_sweep.sh` (replace `q4` and the output folder for the other variants). Keep completed run folders intact for the combined comparison figures.
+If the container stops mid-sweep, rerun the wrapper with `RESUME=1 bash scripts/run_quantized_mnist_sweeps.sh`.
+
+After restoring the archived FP32 and ternary run folders and completing the new sweeps, rebuild the seven comparison figures and their source metrics with `scripts/plot_precision_comparison.py`. Pass one `--run LABEL=PATH` per model. If the older plateau stress runs are stored separately, use `--stress-run LABEL=PATH` for those models. The script writes to `docs/images/continuation` by default, preserving the already published figures until the combined results are reviewed.
 
 The script also includes one diagnostic run at the end: 400k aux same-init, `student_lr=1e-4`, 100 epochs, and a plateau-best strategy that restores the run's own best checkpoint whenever the monitored accuracy plateaus before lowering the learning rate.
 

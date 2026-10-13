@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+OUTPUT_DIR="${OUTPUT_DIR:-runs}"
+
 COMMON_ARGS=(
   --model "${MODEL:-ternary}"
   --seed 0
@@ -15,12 +17,12 @@ COMMON_ARGS=(
   --val-fraction 0.2
   --num-workers 2
   --data-dir data
-  --output-dir runs
+  --output-dir "$OUTPUT_DIR"
 )
 
 log_step() {
-  mkdir -p runs
-  printf '%s | SCRIPT | %s\n' "$(TZ=Asia/Kolkata date '+%Y-%m-%d %I:%M:%S %p IST')" "$*" | tee -a runs/experiment.log
+  mkdir -p "$OUTPUT_DIR"
+  printf '%s | SCRIPT | %s\n' "$(TZ=Asia/Kolkata date '+%Y-%m-%d %I:%M:%S %p IST')" "$*" | tee -a "$OUTPUT_DIR/experiment.log"
 }
 
 log_step "init fixed checkpoints for model=${MODEL:-ternary}"

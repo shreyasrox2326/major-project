@@ -8,4 +8,5 @@ __pycache__/
 data/
 runs/
 runs_smoke/
+runs_smoke*/
 run_*/
