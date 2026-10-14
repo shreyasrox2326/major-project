@@ -1,5 +1,6 @@
 brief.txt
 *.pdf
+!docs/references/subliminal-learning-csd361.pdf
 AGENTS.md
 .agent/
 __pycache__/
