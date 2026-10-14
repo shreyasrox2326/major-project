@@ -130,12 +130,13 @@ def main() -> None:
         ("loss_curves_400k_aux_same.png", ("train_distill_loss", "val_distill_loss"), "KL loss", "400k aux same-init distillation loss"),
     ):
         plt.figure(figsize=(8, 5))
-        for label, root in runs.items():
+        for index, (label, root) in enumerate(runs.items()):
             history = read_csv(student_dir(root, 400_000) / "student_history.csv")
-            for field in fields:
+            for field_index, field in enumerate(fields):
                 multiplier = 100 if field == "mnist_test_accuracy" else 1
                 plt.plot([int(r["epoch"]) for r in history],
                          [multiplier * float(r[field]) for r in history],
+                         color=f"C{index}", linestyle="-" if field_index == 0 else "--",
                          label=f"{label} {field.replace('_', ' ')}")
         plt.xlabel("Epoch")
         plt.ylabel(ylabel)
@@ -155,7 +156,7 @@ def main() -> None:
     plt.xticks(range(len(categories)), [f"{target}\n{init}" for target, init in categories])
     plt.ylabel("Best MNIST test accuracy (%)")
     plt.title("200k target and initialization sweep")
-    plt.legend()
+    plt.legend(ncol=min(5, len(labels)), loc="upper center", bbox_to_anchor=(0.5, -0.12))
     save_plot(args.output_dir / "target_init_sweep_200k.png")
 
     if not args.skip_stress:
@@ -188,8 +189,8 @@ def main() -> None:
             plt.close(fig)
 
     (args.output_dir / "source_runs.json").write_text(json.dumps({
-        "sweep_runs": {label: str(root.resolve()) for label, root in runs.items()},
-        "stress_runs": {} if args.skip_stress else {label: str(stress_runs[label].resolve()) for label in labels},
+        "sweep_runs": {label: str(root) for label, root in runs.items()},
+        "stress_runs": {} if args.skip_stress else {label: str(stress_runs[label]) for label in labels},
     }, indent=2))
     print(f"Wrote comparison metrics and {5 if args.skip_stress else 7} figures to {args.output_dir}")
 

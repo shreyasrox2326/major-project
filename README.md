@@ -151,4 +151,4 @@ The current MNIST results are summarized in:
 
 [docs/bitnet_mlp_results.md](docs/bitnet_mlp_results.md)
 
-Short version: subliminal learning survives in the BitNet-style MLP, but the aux-only transfer is weaker and less stable than in the full-precision MLP.
+Short version: subliminal learning survives in the BitNet-style ternary MLP, but its aux-only transfer is weaker and less stable than FP32. The 4-bit model closes much of that gap, while the 8-bit and 16-bit weight-quantized models perform near FP32 in the centered-input setup.

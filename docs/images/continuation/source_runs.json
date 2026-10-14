@@ -1,0 +1,16 @@
+{
+  "sweep_runs": {
+    "Ternary": "historical_runs/run_3_bitnet_mlp_centered_minus1to1",
+    "FP32": "historical_runs/run_4_fp32_mlp_centered_minus1to1",
+    "Q4": "run_6_q4_mlp_centered_minus1to1",
+    "Q8": "run_7_q8_mlp_centered_minus1to1",
+    "Q16": "run_8_q16_mlp_centered_minus1to1"
+  },
+  "stress_runs": {
+    "Ternary": "historical_runs/run_5_plateau_best_stress/ternary",
+    "FP32": "historical_runs/run_5_plateau_best_stress/fp32",
+    "Q4": "run_6_q4_mlp_centered_minus1to1",
+    "Q8": "run_7_q8_mlp_centered_minus1to1",
+    "Q16": "run_8_q16_mlp_centered_minus1to1"
+  }
+}

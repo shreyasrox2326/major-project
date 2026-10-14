@@ -1,107 +1,97 @@
-# BitNet MLP Subliminal Learning Results
+# MNIST Subliminal Learning Across Weight Precision
 
 ## Setup
 
-| Item | FP32 MLP | BitNet-style MLP |
-|---|---:|---:|
-| Architecture | `784 -> 256 -> 256 -> 13` | `784 -> 256 -> 256 -> 13` |
-| Hidden layers | `nn.Linear + ReLU` | `BitLinear + ReLU` |
-| Main logits | first 10 | first 10 |
-| Aux logits | last 3 | last 3 |
-| Teacher training | MNIST CE, 5 epochs | MNIST CE, 5 epochs |
-| Student training | KL on cached teacher logits, 30 epochs | KL on cached teacher logits, 30 epochs |
-| Optimizer | Adam | Adam |
-| Teacher LR | `1e-3` | `1e-3` |
-| Student LR | `1e-4` | `1e-4` |
-| Batch size | `256` | `256` |
-| MNIST/noise range | `[-1, 1]` | `[-1, 1]` |
-| Validation split | 20% of MNIST train/noise cache | 20% of MNIST train/noise cache |
+The continuation uses the same `784 -> 256 -> 256 -> 13` MLP, centered MNIST/noise inputs in `[-1, 1]`, 5 teacher epochs, 30 student epochs, Adam, batch size 256, teacher LR `1e-3`, student LR `1e-4`, and a 20% validation split. The first 10 outputs are digit logits; the last 3 are auxiliary logits. Each model has its own teacher and cached noise logits, while seeds and the experiment protocol are held fixed.
+
+| Model | Hidden layers | Forward weights |
+|---|---|---|
+| Ternary | `BitLinear + ReLU` | abs-mean-scaled `{-1, 0, +1}` |
+| Q4 | `QuantizedLinear + ReLU` | 4-bit symmetric uniform |
+| Q8 | `QuantizedLinear + ReLU` | 8-bit symmetric uniform |
+| Q16 | `QuantizedLinear + ReLU` | 16-bit symmetric uniform |
+| FP32 | `nn.Linear + ReLU` | full precision |
+
+The quantized layers use FP32 latent trainable weights and straight-through gradients. Biases and activations remain FP32. Q4/Q8/Q16 use the same per-tensor quantizer at different resolutions; the ternary layer uses a different scaling rule. These experiments measure training behavior, not compressed inference speed or memory use.
 
 ## Teacher Check
 
-Both teachers learn MNIST before any subliminal-transfer experiment.
+All teachers learned MNIST before noise-logit distillation.
 
 | Teacher | Final test accuracy |
 |---|---:|
-| BitNet-style MLP | 93.86% |
-| FP32 MLP | 96.61% |
+| Ternary | 93.86% |
+| Q4 | 96.57% |
+| Q8 | 96.80% |
+| Q16 | 96.82% |
+| FP32 | 96.61% |
 
-![Teacher sanity check](images/teacher_sanity.png)
+![Teacher sanity check across weight precision](images/continuation/teacher_sanity.png)
 
 ## Dataset Size Sweep
 
-Same-init students were trained only on auxiliary logits from random noise.
+Same-init students were trained only on auxiliary logits from random noise. Each cell shows **best / final** MNIST test accuracy over 30 epochs.
 
-| Noise samples | FP32 best | FP32 final | BitNet best | BitNet final |
-|---:|---:|---:|---:|---:|
-| 10k | 20.78% | 20.73% | 17.30% | 12.22% |
-| 40k | 37.58% | 36.82% | 22.03% | 21.36% |
-| 100k | 68.12% | 68.12% | 43.13% | 43.13% |
-| 400k | 92.82% | 92.82% | 56.66% | 42.23% |
+| Noise samples | Ternary | Q4 | Q8 | Q16 | FP32 |
+|---:|---:|---:|---:|---:|---:|
+| 10k | 17.30 / 12.22% | 23.07 / 23.06% | 18.32 / 18.26% | 19.59 / 19.50% | 20.78 / 20.73% |
+| 40k | 22.03 / 21.36% | 43.76 / 39.29% | 42.41 / 41.52% | 42.72 / 42.52% | 37.58 / 36.82% |
+| 100k | 43.13 / 43.13% | 66.93 / 66.50% | 70.93 / 70.33% | 71.06 / 70.80% | 68.12 / 68.12% |
+| 400k | 56.66 / 42.23% | 86.43 / 81.88% | 94.08 / 94.08% | 93.36 / 93.36% | 92.82 / 92.82% |
 
-![Dataset size sweep](images/dataset_size_sweep.png)
+![Dataset size sweep with all five models](images/continuation/dataset_size_sweep.png)
 
-Observation: BitNet does transmit the auxiliary signal, but it is weaker and less stable than FP32. The 400k BitNet run reaches 56.66% but ends at 42.23%, so best epoch matters.
+At 400k samples, Q8 and Q16 are near FP32 and remain stable through epoch 30. Q4 transfers much more strongly than ternary but shows a smaller best-to-final decline. The small-data results are not strictly ordered by precision.
 
-## 400k Aux Same-Init Curve
+## 400k Aux Same-Init Curves
 
-This is the clearest dataset-size comparison. FP32 keeps climbing to high accuracy. BitNet rises quickly, peaks around the middle, then drops.
+The accuracy curves show when each model learns the digit signal and whether it persists. The KL curves show optimization on the noise targets; lower KL loss does not by itself imply higher MNIST accuracy.
 
-![400k aux same-init accuracy curve](images/accuracy_curve_400k_aux_same.png)
+![400k aux same-init accuracy curves](images/continuation/accuracy_curve_400k_aux_same.png)
 
-The distillation losses continue to decrease for both models, so lower KL loss does not directly mean better MNIST accuracy.
+![400k aux same-init distillation loss curves](images/continuation/loss_curves_400k_aux_same.png)
 
-![400k aux same-init loss curves](images/loss_curves_400k_aux_same.png)
+## 200k Target and Initialization Sweep
 
-## 200k Target / Initialization Sweep
+Best MNIST test accuracy over 30 epochs:
 
-| Target / init | FP32 best | BitNet best |
-|---|---:|---:|
-| Aux, same init | 83.00% | 56.75% |
-| Main, same init | 96.58% | 93.68% |
-| All, same init | 96.60% | 93.60% |
-| Aux, different init | 11.52% | 15.81% |
-| Main, different init | 96.09% | 92.80% |
-| All, different init | 96.08% | 92.70% |
+| Target / init | Ternary | Q4 | Q8 | Q16 | FP32 |
+|---|---:|---:|---:|---:|---:|
+| Aux, same | 56.75% | 78.37% | 86.17% | 85.53% | 83.00% |
+| Main, same | 93.68% | 96.32% | 96.78% | 96.79% | 96.58% |
+| All, same | 93.60% | 96.43% | 96.79% | 96.77% | 96.60% |
+| Aux, different | 15.81% | 12.92% | 11.14% | 13.00% | 11.52% |
+| Main, different | 92.80% | 96.08% | 96.48% | 96.23% | 96.09% |
+| All, different | 92.70% | 96.09% | 96.43% | 96.28% | 96.08% |
 
-![200k target and init sweep](images/target_init_sweep_200k.png)
+![200k target and initialization sweep](images/continuation/target_init_sweep_200k.png)
 
-Observation: main/all logits transfer normally in both models. The interesting gap is aux-only transfer: FP32 is much stronger under same initialization, while different initialization stays near low accuracy.
+Main/all-logit distillation succeeds with either initialization. The auxiliary-only signal is strong with the teacher's initialization and weak with a different initialization for every model.
 
-## Plateau Stress Test
+## Plateau-Best Stress Test
 
-Stress test: 400k aux same-init, LR `1e-4`, 100 epochs. The run starts fresh and uses a plateau-best strategy: when MNIST accuracy plateaus, reload the run's own best checkpoint, lower LR, and continue.
+These runs start fresh with 400k aux same-init samples, student LR `1e-4`, and 100 epochs. On an accuracy plateau, training reloads that run's own best checkpoint, lowers LR, and continues.
 
 | Model | Best accuracy | Best epoch | Final accuracy |
 |---|---:|---:|---:|
-| BitNet-style MLP | 59.90% | 55 | 58.13% |
-| FP32 MLP | 94.16% | 82 | 94.15% |
+| Ternary | 59.90% | 55 | 58.13% |
+| Q4 | 88.62% | 39 | 87.19% |
+| Q8 | 94.77% | 91 | 94.65% |
+| Q16 | 94.51% | 96 | 94.49% |
+| FP32 | 94.16% | 82 | 94.15% |
 
-The BitNet stress run no longer collapses under this setting. It remains much weaker than FP32, but it stabilizes around the high-50% range.
+![Plateau-best stress accuracy and learning rate](images/continuation/plateau_best_accuracy_lr.png)
 
-![Plateau-best stress accuracy and LR](images/plateau_best_accuracy_lr.png)
+![Plateau-best stress loss and learning rate](images/continuation/plateau_best_loss_lr.png)
 
-![Plateau-best stress loss and LR](images/plateau_best_loss_lr.png)
+Q4 remains well above ternary, while Q8 and Q16 finish close to FP32. Best epochs are selected using MNIST test accuracy, and the plateau scheduler also monitors it. These results are diagnostic comparisons rather than unbiased held-out estimates.
 
-## Preprocessing Note
+## Methodology Notes
 
-The earlier BitNet run used MNIST/noise in `[0,1]`. It showed much weaker transfer.
+An earlier ternary run used uncentered `[0, 1]` inputs and produced much weaker auxiliary transfer; the main comparison uses centered `[-1, 1]` inputs for every model. An earlier ternary stress run at LR `3e-4` also collapsed after a brief peak; the comparable stress runs above all start at `1e-4`.
 
-| Noise samples | BitNet `[0,1]` best | BitNet `[-1,1]` best |
-|---:|---:|---:|
-| 10k | 9.14% | 17.30% |
-| 40k | 9.82% | 22.03% |
-| 100k | 16.72% | 43.13% |
-| 400k | 12.42% | 56.66% |
+The experiments use one seed. Small differences among Q8, Q16, and FP32 should therefore not be treated as a reliable ranking without repeated runs. Ternary also differs from Q4/Q8/Q16 in its quantizer scaling rule.
 
-This should be treated as a methodological note, not the main comparison. The main FP32-vs-BitNet comparison uses the centered `[-1,1]` setup for both models.
+## Reproduction Data
 
-## LR Sensitivity Note
-
-An earlier BitNet stress run used LR `3e-4` with ordinary `ReduceLROnPlateau`. It peaked at 50.76% by epoch 3 and ended at 18.78%. The likely issue is that `3e-4` was too high for the BitNet student: by the time LR reduction triggered, the model had already drifted into a collapsed state.
-
-This is also a methodology note. The main stress result uses LR `1e-4`, which is consistent with the main sweep.
-
-## Takeaway
-
-Subliminal learning survives in the BitNet-style MLP, but it is attenuated and less stable than in the FP32 MLP. The result is not just random chance: with centered inputs and enough noise samples, aux-only same-init BitNet students reach well above chance. The gap is that FP32 transfers the hidden signal much more cleanly and remains stable for longer.
+The seven combined figures and their [metrics table](images/continuation/comparison_metrics.csv) were generated from archived run folders 3–5 and local run folders 6–8 using `scripts/plot_precision_comparison.py`. Raw checkpoints and histories remain gitignored; the plotted metrics and figures are tracked here.
