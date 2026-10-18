@@ -126,7 +126,7 @@ def main() -> None:
     save_plot(args.output_dir / "dataset_size_sweep.png")
 
     for filename, fields, ylabel, title in (
-        ("accuracy_curve_400k_aux_same.png", ("mnist_test_accuracy",), "MNIST test accuracy (%)", "400k aux same-init accuracy"),
+        ("accuracy_curve_400k_aux_same.png", ("mnist_test_accuracy",), "MNIST test accuracy (%)", "400k noise images: MNIST accuracy by epoch"),
         ("loss_curves_400k_aux_same.png", ("train_distill_loss", "val_distill_loss"), "KL loss", "400k aux same-init distillation loss"),
     ):
         plt.figure(figsize=(8, 5))
@@ -137,7 +137,7 @@ def main() -> None:
                 plt.plot([int(r["epoch"]) for r in history],
                          [multiplier * float(r[field]) for r in history],
                          color=f"C{index}", linestyle="-" if field_index == 0 else "--",
-                         label=f"{label} {field.replace('_', ' ')}")
+                         label=label if filename == "accuracy_curve_400k_aux_same.png" else f"{label} {field.replace('_', ' ')}")
         plt.xlabel("Epoch")
         plt.ylabel(ylabel)
         plt.title(title)
@@ -153,7 +153,7 @@ def main() -> None:
                              and r["init"] == init) for target, init in categories]
         plt.bar([position - 0.4 + width * (index + 0.5) for position in range(len(categories))],
                 values, width=width, label=label)
-    plt.xticks(range(len(categories)), [f"{target}\n{init}" for target, init in categories])
+    plt.xticks(range(len(categories)), [f"{target}-logits\n{init}-init" for target, init in categories])
     plt.ylabel("Best MNIST test accuracy (%)")
     plt.title("200k target and initialization sweep")
     plt.legend(ncol=min(5, len(labels)), loc="upper center", bbox_to_anchor=(0.5, -0.12))
@@ -161,7 +161,7 @@ def main() -> None:
 
     if not args.skip_stress:
         for filename, fields, ylabel, title in (
-            ("plateau_best_accuracy_lr.png", ("mnist_test_accuracy",), "MNIST test accuracy (%)", "Plateau-best stress accuracy and LR"),
+            ("plateau_best_accuracy_lr.png", ("mnist_test_accuracy",), "MNIST test accuracy (%)", "Extended training: MNIST accuracy and learning rate"),
             ("plateau_best_loss_lr.png", ("train_distill_loss", "val_distill_loss"), "KL loss", "Plateau-best stress loss and LR"),
         ):
             fig, (ax, lr_ax) = plt.subplots(2, 1, sharex=True, figsize=(9, 7),
